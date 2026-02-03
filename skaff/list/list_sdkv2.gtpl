@@ -134,7 +134,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 				continue
 			}
 			if rd.Id() == "" {
-				// Resource is logically deleted
+				tflog.Warn(ctx, "Resource disappeared during listing, skipping")
 				continue
 			}
 
