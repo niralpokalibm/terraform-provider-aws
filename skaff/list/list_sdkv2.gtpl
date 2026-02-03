@@ -98,7 +98,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 	{{ if .IncludeComments }}
 	// TIP: -- 3. Get information about a resource from AWS
 	{{- end }}
-	tflog.Info(ctx, "Listing {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
+	tflog.Info(ctx, "Listing {{ .HumanFriendlyServiceShort }} {{ .HumanListResourceName }}")
 	stream.Results = func(yield func(list.ListResult) bool) {
 		var input {{ .SDKPackage }}.List{{ .ListResource }}sInput
 		for item, err := range list{{ .ListResource }}s(ctx, conn, &input) {
@@ -120,7 +120,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 			rd := l.ResourceData()
 			rd.SetId(arn)
 
-			tflog.Info(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
+			tflog.Info(ctx, "Reading {{ .HumanFriendlyServiceShort }} {{ .HumanListResourceName }}")
 	        {{- if .IncludeComments }}
 			// TIP: -- 5. Populate the resource
 			// In many cases, the value in item will have sufficient information to populate the resource data.
@@ -132,7 +132,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 	        {{- end }}
 			diags := resource{{ .ListResource }}Read(ctx, rd, l.Meta())
 			if diags.HasError() {
-				tflog.Error(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}", map[string]any{
+				tflog.Error(ctx, "Reading {{ .HumanFriendlyServiceShort }} {{ .HumanListResourceName }}", map[string]any{
 					"diags": sdkdiag.DiagnosticsString(diags),
 				})
 				continue
@@ -183,7 +183,7 @@ func list{{ .ListResource }}s(ctx context.Context, conn *{{ .SDKPackage }}.Clien
 		for pages.HasMorePages() {
 			page, err := pages.NextPage(ctx)
 			if err != nil {
-				yield(awstypes.{{ .ListResource }}{}, fmt.Errorf("listing {{ .HumanFriendlyService }} {{ .HumanListResourceName }} resources: %w", err))
+				yield(awstypes.{{ .ListResource }}{}, fmt.Errorf("listing {{ .HumanFriendlyServiceShort }} {{ .HumanListResourceName }} resources: %w", err))
 				return
 			}
 
