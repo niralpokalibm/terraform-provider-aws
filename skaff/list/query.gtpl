@@ -3,4 +3,9 @@
 
 list "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "test" {
   provider = aws
+{{ if .IsRegionOverride }}
+  config {
+    region = var.region
+  }
+{{ end -}}
 }
