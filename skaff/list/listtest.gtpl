@@ -62,18 +62,17 @@ func TestAcc{{ .Service }}{{ .ListResource }}_List_Basic(t *testing.T) {
 				},
 				QueryResultChecks: []querycheck.QueryResultCheck{
 					querycheck.ExpectIdentity("aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test", map[string]knownvalue.Check{
-						names.AttrName:      knownvalue.StringExact(rName + "-0"),
 						names.AttrAccountID: tfknownvalue.AccountID(),
 						names.AttrRegion:    knownvalue.StringExact(acctest.Region()),
+						names.AttrName:      knownvalue.StringExact(rName + "-0"),
 					}),
 					querycheck.ExpectIdentity("aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test", map[string]knownvalue.Check{
-						names.AttrName:      knownvalue.StringExact(rName + "-1"),
 						names.AttrAccountID: tfknownvalue.AccountID(),
 						names.AttrRegion:    knownvalue.StringExact(acctest.Region()),
+						names.AttrName:      knownvalue.StringExact(rName + "-1"),
 					}),
 				},
 			},
 		},
 	})
 }
-
