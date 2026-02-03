@@ -109,6 +109,11 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 			}
 
 			arn := aws.ToString(item.{{ .ListResource }}Arn)
+	        {{- if .IncludeComments }}
+			// TIP: -- 4. Set identifying attributes for logging
+			// Set one or more logging fields with attributes that will identify the resource.
+			// Typically, these will be the attributes used in the Resource Identity
+	        {{- end }}
 			ctx := tflog.SetField(ctx, logging.ResourceAttributeKey(names.AttrID), arn)
 
 			result := request.NewListResult(ctx)
@@ -117,7 +122,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 
 			tflog.Info(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
 	        {{- if .IncludeComments }}
-			// TIP: -- 4. Populate the resource
+			// TIP: -- 5. Populate the resource
 			// In many cases, the value in item will have sufficient information to populate the resource data.
 			// If this is the case, factor out the resource flattening from resource{{ .ListResource }}Read.
 			// See, for example, the implementation of `vpc_subnet_list`.
