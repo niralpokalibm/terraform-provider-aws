@@ -7500,9 +7500,10 @@ service "s3" {
   }
 
   names {
-    aliases             = ["s3api"]
-    provider_name_upper = "S3"
-    human_friendly      = "S3 (Simple Storage)"
+    aliases              = ["s3api"]
+    provider_name_upper  = "S3"
+    human_friendly       = "S3 (Simple Storage)"
+    human_friendly_short = "S3"
   }
 
   env_var {
