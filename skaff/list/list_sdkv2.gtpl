@@ -114,11 +114,12 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 			result := request.NewListResult(ctx)
 			rd := l.ResourceData()
 			rd.SetId(arn)
-	        {{ if .IncludeComments -}}
+
+			tflog.Info(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
+	        {{- if .IncludeComments }}
 	        // TIP: -- 4. Set the ID, arguments, and attributes
 	        // Using a field name prefix allows mapping fields such as `{{ .ListResource }}Id` to `ID`
 	        {{- end }}
-			tflog.Info(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
 			diags := resource{{ .ListResource }}Read(ctx, rd, l.Meta())
 			if diags.HasError() {
 				tflog.Error(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}", map[string]any{
