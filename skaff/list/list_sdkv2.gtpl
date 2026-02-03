@@ -117,8 +117,13 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 
 			tflog.Info(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}")
 	        {{- if .IncludeComments }}
-	        // TIP: -- 4. Set the ID, arguments, and attributes
-	        // Using a field name prefix allows mapping fields such as `{{ .ListResource }}Id` to `ID`
+			// TIP: -- 4. Populate the resource
+			// In many cases, the value in item will have sufficient information to populate the resource data.
+			// If this is the case, factor out the resource flattening from resource{{ .ListResource }}Read.
+			// See, for example, the implementation of `vpc_subnet_list`.
+			//
+			// If resource{{ .ListResource }}Read makes additional API calls to populate the resource data
+			// they should only be made if request.IncludeResource is true.
 	        {{- end }}
 			diags := resource{{ .ListResource }}Read(ctx, rd, l.Meta())
 			if diags.HasError() {
@@ -186,4 +191,3 @@ func list{{ .ListResource }}s(ctx context.Context, conn *{{ .SDKPackage }}.Clien
 		}
 	}
 }
-
