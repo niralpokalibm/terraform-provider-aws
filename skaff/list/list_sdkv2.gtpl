@@ -133,8 +133,7 @@ func (l *listResource{{ .ListResource }}) List(ctx context.Context, request list
 			diags := resource{{ .ListResource }}Read(ctx, rd, l.Meta())
 			if diags.HasError() {
 				tflog.Error(ctx, "Reading {{ .HumanFriendlyService }} {{ .HumanListResourceName }}", map[string]any{
-					names.AttrID: arn,
-					"diags":      sdkdiag.DiagnosticsString(diags),
+					"diags": sdkdiag.DiagnosticsString(diags),
 				})
 				continue
 			}
