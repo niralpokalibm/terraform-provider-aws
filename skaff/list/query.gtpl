@@ -9,3 +9,10 @@ list "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "test" {
   }
 {{ end -}}
 }
+{{ if not .IsRegionOverride }}
+list "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "include" {
+  provider = aws
+
+  include_resource = true
+}
+{{ end -}}
