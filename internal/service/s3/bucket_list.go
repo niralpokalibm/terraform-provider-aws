@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs/fwdiag"
-	"github.com/hashicorp/terraform-provider-aws/internal/errs/sdkdiag"
 	"github.com/hashicorp/terraform-provider-aws/internal/framework"
 	"github.com/hashicorp/terraform-provider-aws/internal/logging"
 	inttypes "github.com/hashicorp/terraform-provider-aws/internal/types"
@@ -69,21 +68,21 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			allBuckets = append(allBuckets, item)
 		}
 		
-		tflog.Info(ctx, "S3 buckets collected", map[string]interface{}{
-			"count": len(allBuckets),
-		})
+		tflog.Info(ctx, "========================================")
+		tflog.Info(ctx, "S3 BUCKET LISTING - PERFORMANCE SUMMARY")
+		tflog.Info(ctx, "========================================")
+		tflog.Info(ctx, fmt.Sprintf("Total buckets found: %d", len(allBuckets)))
 		
 		// Batch fetch tags using Resource Groups Tagging API
 		tagsStart := time.Now()
 		tagsMap := l.fetchTagsInBatch(ctx, allBuckets)
 		tagsElapsed := time.Since(tagsStart)
 		
-		tflog.Info(ctx, "Batch tags fetched", map[string]interface{}{
-			"elapsed":      tagsElapsed.String(),
-			"tags_fetched": len(tagsMap),
-		})
+		tflog.Info(ctx, fmt.Sprintf("✓ Batch tags fetched: %s (%d buckets)", tagsElapsed.Round(time.Millisecond), len(tagsMap)))
 		
-		// Now process each bucket with tags already fetched
+		readStart := time.Now()
+		
+		// Process each bucket sequentially
 		for _, item := range allBuckets {
 			bucketName := aws.ToString(item.Name)
 			ctx := tflog.SetField(ctx, logging.ResourceAttributeKey(names.AttrBucket), bucketName)
@@ -93,15 +92,8 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			rd.SetId(bucketName)
 			rd.Set(names.AttrBucket, bucketName)
 
-			tflog.Info(ctx, "Reading S3 Bucket")
-			
-			// Read bucket configuration (without tags - we'll set them separately)
 			diags := resourceBucketRead(ctx, rd, l.Meta())
 			if diags.HasError() {
-				tflog.Error(ctx, "Reading S3 Bucket", map[string]any{
-					names.AttrBucket: bucketName,
-					"diags":          sdkdiag.DiagnosticsString(diags),
-				})
 				continue
 			}
 			if rd.Id() == "" {
@@ -124,31 +116,21 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			}
 			
 			count++
-			if count%100 == 0 {
-				elapsed := time.Since(startTime)
-				tflog.Info(ctx, "Progress update", map[string]interface{}{
-					"processed":    count,
-					"elapsed":      elapsed.String(),
-					"rate_per_sec": float64(count) / elapsed.Seconds(),
-				})
-			}
 
 			if !yield(result) {
-				elapsed := time.Since(startTime)
-				tflog.Info(ctx, "Listing stopped by caller", map[string]interface{}{
-					"processed": count,
-					"elapsed":   elapsed.String(),
-				})
 				return
 			}
 		}
 		
+		readElapsed := time.Since(readStart)
+		
 		elapsed := time.Since(startTime)
-		tflog.Info(ctx, "S3 bucket listing completed", map[string]interface{}{
-			"total_processed": count,
-			"elapsed":         elapsed.String(),
-			"rate_per_sec":    float64(count) / elapsed.Seconds(),
-		})
+		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s", readElapsed.Round(time.Millisecond)))
+		tflog.Info(ctx, "========================================")
+		tflog.Info(ctx, fmt.Sprintf("TOTAL TIME: %s", elapsed.Round(time.Millisecond)))
+		tflog.Info(ctx, fmt.Sprintf("Buckets processed: %d", count))
+		tflog.Info(ctx, fmt.Sprintf("Rate: %.1f buckets/second", float64(count)/elapsed.Seconds()))
+		tflog.Info(ctx, "========================================")
 	}
 }
 

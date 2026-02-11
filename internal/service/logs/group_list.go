@@ -52,9 +52,12 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 	stream.Results = func(yield func(list.ListResult) bool) {
 		startTime := time.Now()
 		count := 0
-		tflog.Info(ctx, "Starting log group listing", map[string]interface{}{
-			"start_time": startTime.Format("15:04:05"),
-		})
+		totalBatches := 0
+		totalTagsTime := time.Duration(0)
+		
+		tflog.Info(ctx, "================================================")
+		tflog.Info(ctx, "CLOUDWATCH LOGS LISTING - PERFORMANCE SUMMARY")
+		tflog.Info(ctx, "================================================")
 		
 		result := request.NewListResult(ctx)
 		var input cloudwatchlogs.DescribeLogGroupsInput
@@ -76,12 +79,8 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 				batchStart := time.Now()
 				tagsMap := l.fetchTagsInBatch(ctx, currentBatch)
 				batchElapsed := time.Since(batchStart)
-				
-				tflog.Info(ctx, "Batch tags fetched", map[string]interface{}{
-					"batch_size":   len(currentBatch),
-					"tags_fetched": len(tagsMap),
-					"elapsed":      batchElapsed.String(),
-				})
+				totalTagsTime += batchElapsed
+				totalBatches++
 				
 				// Yield results for this batch
 				for _, lg := range currentBatch {
@@ -105,22 +104,8 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 					}
 					
 					count++
-					if count%100 == 0 {
-						elapsed := time.Since(startTime)
-						tflog.Info(ctx, "Progress update", map[string]interface{}{
-							"processed":    count,
-							"elapsed":      elapsed.String(),
-							"rate_per_sec": float64(count) / elapsed.Seconds(),
-						})
-					}
 					
 					if !yield(result) {
-						elapsed := time.Since(startTime)
-						tflog.Info(ctx, "Listing stopped by caller", map[string]interface{}{
-							"processed": count,
-							"elapsed":   elapsed.String(),
-							"end_time":  time.Now().Format("15:04:05"),
-						})
 						return
 					}
 				}
@@ -134,12 +119,8 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 			batchStart := time.Now()
 			tagsMap := l.fetchTagsInBatch(ctx, currentBatch)
 			batchElapsed := time.Since(batchStart)
-			
-			tflog.Info(ctx, "Final batch tags fetched", map[string]interface{}{
-				"batch_size":   len(currentBatch),
-				"tags_fetched": len(tagsMap),
-				"elapsed":      batchElapsed.String(),
-			})
+			totalTagsTime += batchElapsed
+			totalBatches++
 			
 			for _, lg := range currentBatch {
 				result := request.NewListResult(ctx)
@@ -163,24 +144,19 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 				count++
 				
 				if !yield(result) {
-					elapsed := time.Since(startTime)
-					tflog.Info(ctx, "Listing stopped by caller", map[string]interface{}{
-						"processed": count,
-						"elapsed":   elapsed.String(),
-						"end_time":  time.Now().Format("15:04:05"),
-					})
 					return
 				}
 			}
 		}
 		
 		elapsed := time.Since(startTime)
-		tflog.Info(ctx, "Listing completed", map[string]interface{}{
-			"total_processed": count,
-			"elapsed":         elapsed.String(),
-			"rate_per_sec":    float64(count) / elapsed.Seconds(),
-			"end_time":        time.Now().Format("15:04:05"),
-		})
+		tflog.Info(ctx, fmt.Sprintf("✓ Total batches processed: %d", totalBatches))
+		tflog.Info(ctx, fmt.Sprintf("✓ Total tag fetch time: %s", totalTagsTime.Round(time.Millisecond)))
+		tflog.Info(ctx, "================================================")
+		tflog.Info(ctx, fmt.Sprintf("TOTAL TIME: %s", elapsed.Round(time.Millisecond)))
+		tflog.Info(ctx, fmt.Sprintf("Log groups processed: %d", count))
+		tflog.Info(ctx, fmt.Sprintf("Rate: %.1f log groups/second", float64(count)/elapsed.Seconds()))
+		tflog.Info(ctx, "================================================")
 	}
 }
 
