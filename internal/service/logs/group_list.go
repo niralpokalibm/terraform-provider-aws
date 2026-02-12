@@ -93,6 +93,8 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 					arn := aws.ToString(lg.LogGroupArn)
 					if tags, ok := tagsMap[arn]; ok && len(tags) > 0 {
 						rd.Set("tags", tags)
+						// Set tags_all to match tags (no provider-level default tags in list context)
+						rd.Set("tags_all", tags)
 					}
 					
 					result.DisplayName = aws.ToString(lg.LogGroupName)

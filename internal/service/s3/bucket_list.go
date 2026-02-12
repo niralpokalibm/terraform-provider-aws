@@ -15,6 +15,7 @@ import (
 	awstypes "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs/fwdiag"
 	"github.com/hashicorp/terraform-provider-aws/internal/framework"
 	"github.com/hashicorp/terraform-provider-aws/internal/logging"
@@ -51,6 +52,7 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 	stream.Results = func(yield func(list.ListResult) bool) {
 		startTime := time.Now()
 		count := 0
+		var readElapsed, elapsed time.Duration
 		
 		input := s3.ListBucketsInput{
 			BucketRegion: aws.String(l.Meta().Region(ctx)),
@@ -82,34 +84,74 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 		
 		readStart := time.Now()
 		
-		// Process each bucket sequentially
-		for _, item := range allBuckets {
-			bucketName := aws.ToString(item.Name)
-			ctx := tflog.SetField(ctx, logging.ResourceAttributeKey(names.AttrBucket), bucketName)
+		// Process buckets concurrently with a semaphore
+		const concurrency = 10
+		semaphore := make(chan struct{}, concurrency)
+		
+		type bucketResult struct {
+			item awstypes.Bucket
+			rd   *schema.ResourceData
+			err  error
+		}
+		resultsChan := make(chan bucketResult, len(allBuckets))
+		
+		// Launch goroutines
+		for _, bucket := range allBuckets {
+			semaphore <- struct{}{} // Acquire
+			go func(item awstypes.Bucket) {
+				defer func() { <-semaphore }() // Release
+				
+				bucketName := aws.ToString(item.Name)
+				
+				rd := l.ResourceData()
+				rd.SetId(bucketName)
+				rd.Set(names.AttrBucket, bucketName)
+				
+				// Use the parent context, not the scoped one
+				diags := resourceBucketRead(ctx, rd, l.Meta())
+				
+				var err error
+				if diags.HasError() {
+					err = fmt.Errorf("error reading bucket")
+				}
+				
+				resultsChan <- bucketResult{item, rd, err}
+			}(bucket)
+		}
+		
+		// Collect all results
+		results := make([]bucketResult, 0, len(allBuckets))
+		
+		for i := 0; i < len(allBuckets); i++ {
+			results = append(results, <-resultsChan)
+		}
+		close(resultsChan)
+		
+		readElapsed = time.Since(readStart)
+		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s (%d workers)", readElapsed.Round(time.Millisecond), concurrency))
+		
+		// Yield results
+		for _, res := range results {
+			bucketName := aws.ToString(res.item.Name)
+			bucketCtx := tflog.SetField(ctx, logging.ResourceAttributeKey(names.AttrBucket), bucketName)
 
-			result := request.NewListResult(ctx)
-			rd := l.ResourceData()
-			rd.SetId(bucketName)
-			rd.Set(names.AttrBucket, bucketName)
-
-			diags := resourceBucketRead(ctx, rd, l.Meta())
-			if diags.HasError() {
-				continue
-			}
-			if rd.Id() == "" {
-				// Resource is logically deleted
+			result := request.NewListResult(bucketCtx)
+			
+			if res.err != nil || res.rd.Id() == "" {
 				continue
 			}
 			
 			// Set tags from batch fetch
 			bucketARN := bucketARN(ctx, l.Meta(), bucketName)
 			if tags, ok := tagsMap[bucketARN]; ok && len(tags) > 0 {
-				rd.Set(names.AttrTags, tags)
+				res.rd.Set(names.AttrTags, tags)
+				// Set tags_all to match tags (no provider-level default tags in list context)
+				res.rd.Set("tags_all", tags)
 			}
 
 			result.DisplayName = bucketName
 
-			l.SetResult(ctx, l.Meta(), request.IncludeResource, &result, rd)
+			l.SetResult(ctx, l.Meta(), request.IncludeResource, &result, res.rd)
 			if result.Diagnostics.HasError() {
 				yield(result)
 				return
@@ -122,9 +164,10 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			}
 		}
 		
-		readElapsed := time.Since(readStart)
+		readElapsed = time.Since(readStart)
+		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s (%d workers)", readElapsed.Round(time.Millisecond), concurrency))
 		
-		elapsed := time.Since(startTime)
+		elapsed = time.Since(startTime)
 		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s", readElapsed.Round(time.Millisecond)))
 		tflog.Info(ctx, "========================================")
 		tflog.Info(ctx, fmt.Sprintf("TOTAL TIME: %s", elapsed.Round(time.Millisecond)))
