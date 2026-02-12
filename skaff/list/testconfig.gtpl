@@ -9,6 +9,10 @@ resource "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "test" {
   count = var.resource_count
 {{ end }}
   name = "${var.rName}-${count.index}"
+{{- if .IsIncludeResource }}
+
+  tags = var.resource_tags
+{{- end }}
 }
 
 variable "rName" {
@@ -27,5 +31,14 @@ variable "region" {
   description = "Region to deploy resource in"
   type        = string
   nullable    = false
+}
+{{ end -}}
+
+{{ if .IsIncludeResource }}
+variable "resource_tags" {
+  description = "Tags to set on resource. To specify no tags, set to `null`"
+  # Not setting a default, so that this must explicitly be set to `null` to specify no tags
+  type     = map(string)
+  nullable = true
 }
 {{ end -}}
