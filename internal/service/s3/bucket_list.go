@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
@@ -50,10 +49,6 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 
 	tflog.Info(ctx, "Listing S3 Bucket")
 	stream.Results = func(yield func(list.ListResult) bool) {
-		startTime := time.Now()
-		count := 0
-		var readElapsed, elapsed time.Duration
-		
 		input := s3.ListBucketsInput{
 			BucketRegion: aws.String(l.Meta().Region(ctx)),
 			MaxBuckets:   aws.Int32(int32(request.Limit)),
@@ -70,19 +65,8 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			allBuckets = append(allBuckets, item)
 		}
 		
-		tflog.Info(ctx, "========================================")
-		tflog.Info(ctx, "S3 BUCKET LISTING - PERFORMANCE SUMMARY")
-		tflog.Info(ctx, "========================================")
-		tflog.Info(ctx, fmt.Sprintf("Total buckets found: %d", len(allBuckets)))
-		
 		// Batch fetch tags using Resource Groups Tagging API
-		tagsStart := time.Now()
 		tagsMap := l.fetchTagsInBatch(ctx, allBuckets)
-		tagsElapsed := time.Since(tagsStart)
-		
-		tflog.Info(ctx, fmt.Sprintf("✓ Batch tags fetched: %s (%d buckets)", tagsElapsed.Round(time.Millisecond), len(tagsMap)))
-		
-		readStart := time.Now()
 		
 		// Process buckets concurrently with a semaphore
 		const concurrency = 10
@@ -127,9 +111,6 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 		}
 		close(resultsChan)
 		
-		readElapsed = time.Since(readStart)
-		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s (%d workers)", readElapsed.Round(time.Millisecond), concurrency))
-		
 		// Yield results
 		for _, res := range results {
 			bucketName := aws.ToString(res.item.Name)
@@ -156,24 +137,11 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 				yield(result)
 				return
 			}
-			
-			count++
 
 			if !yield(result) {
 				return
 			}
 		}
-		
-		readElapsed = time.Since(readStart)
-		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s (%d workers)", readElapsed.Round(time.Millisecond), concurrency))
-		
-		elapsed = time.Since(startTime)
-		tflog.Info(ctx, fmt.Sprintf("✓ Bucket configurations read: %s", readElapsed.Round(time.Millisecond)))
-		tflog.Info(ctx, "========================================")
-		tflog.Info(ctx, fmt.Sprintf("TOTAL TIME: %s", elapsed.Round(time.Millisecond)))
-		tflog.Info(ctx, fmt.Sprintf("Buckets processed: %d", count))
-		tflog.Info(ctx, fmt.Sprintf("Rate: %.1f buckets/second", float64(count)/elapsed.Seconds()))
-		tflog.Info(ctx, "========================================")
 	}
 }
 

@@ -50,15 +50,6 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 	}
 
 	stream.Results = func(yield func(list.ListResult) bool) {
-		startTime := time.Now()
-		count := 0
-		totalBatches := 0
-		totalTagsTime := time.Duration(0)
-		
-		tflog.Info(ctx, "================================================")
-		tflog.Info(ctx, "CLOUDWATCH LOGS LISTING - PERFORMANCE SUMMARY")
-		tflog.Info(ctx, "================================================")
-		
 		result := request.NewListResult(ctx)
 		var input cloudwatchlogs.DescribeLogGroupsInput
 		
@@ -76,11 +67,7 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 			
 			// Process batch when we have 50 items (full page)
 			if len(currentBatch) >= 50 {
-				batchStart := time.Now()
 				tagsMap := l.fetchTagsInBatch(ctx, currentBatch)
-				batchElapsed := time.Since(batchStart)
-				totalTagsTime += batchElapsed
-				totalBatches++
 				
 				// Yield results for this batch
 				for _, lg := range currentBatch {
@@ -105,8 +92,6 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 						return
 					}
 					
-					count++
-					
 					if !yield(result) {
 						return
 					}
@@ -118,11 +103,7 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 		
 		// Process any remaining items in the last batch
 		if len(currentBatch) > 0 {
-			batchStart := time.Now()
 			tagsMap := l.fetchTagsInBatch(ctx, currentBatch)
-			batchElapsed := time.Since(batchStart)
-			totalTagsTime += batchElapsed
-			totalBatches++
 			
 			for _, lg := range currentBatch {
 				result := request.NewListResult(ctx)
@@ -133,6 +114,8 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 				arn := aws.ToString(lg.LogGroupArn)
 				if tags, ok := tagsMap[arn]; ok && len(tags) > 0 {
 					rd.Set("tags", tags)
+					// Set tags_all to match tags (no provider-level default tags in list context)
+					rd.Set("tags_all", tags)
 				}
 				
 				result.DisplayName = aws.ToString(lg.LogGroupName)
@@ -143,22 +126,11 @@ func (l *logGroupListResource) List(ctx context.Context, request list.ListReques
 					return
 				}
 				
-				count++
-				
 				if !yield(result) {
 					return
 				}
 			}
 		}
-		
-		elapsed := time.Since(startTime)
-		tflog.Info(ctx, fmt.Sprintf("✓ Total batches processed: %d", totalBatches))
-		tflog.Info(ctx, fmt.Sprintf("✓ Total tag fetch time: %s", totalTagsTime.Round(time.Millisecond)))
-		tflog.Info(ctx, "================================================")
-		tflog.Info(ctx, fmt.Sprintf("TOTAL TIME: %s", elapsed.Round(time.Millisecond)))
-		tflog.Info(ctx, fmt.Sprintf("Log groups processed: %d", count))
-		tflog.Info(ctx, fmt.Sprintf("Rate: %.1f log groups/second", float64(count)/elapsed.Seconds()))
-		tflog.Info(ctx, "================================================")
 	}
 }
 
