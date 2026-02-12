@@ -112,11 +112,15 @@ func Create(listName, snakeName string, comments, framework, force bool) error {
 		return fmt.Errorf("writing list resource test template: %w", err)
 	}
 
-	if err := testConfig(listName, "list_basic", force, templateData, false); err != nil {
+	if err := testConfig(listName, "list_basic", force, templateData, false, false); err != nil {
 		return err
 	}
 
-	if err := testConfig(listName, "list_region_override", force, templateData, true); err != nil {
+	if err := testConfig(listName, "list_include_resource", force, templateData, true, false); err != nil {
+		return err
+	}
+
+	if err := testConfig(listName, "list_region_override", force, templateData, false, true); err != nil {
 		return err
 	}
 
@@ -130,11 +134,12 @@ func Create(listName, snakeName string, comments, framework, force bool) error {
 }
 
 type testConfigTemplateData struct {
-	IsRegionOverride bool
+	IsIncludeResource bool
+	IsRegionOverride  bool
 	TemplateData
 }
 
-func testConfig(listName, path string, force bool, templateData TemplateData, regionOverride bool) error {
+func testConfig(listName, path string, force bool, templateData TemplateData, includeResource, regionOverride bool) error {
 	tcf := "main.tf"
 	tcf = filepath.Join("testdata", listName, path, tcf)
 	if err := os.MkdirAll(filepath.Dir(tcf), 0755); err != nil {
@@ -142,8 +147,9 @@ func testConfig(listName, path string, force bool, templateData TemplateData, re
 	}
 
 	testConfig := testConfigTemplateData{
-		IsRegionOverride: regionOverride,
-		TemplateData:     templateData,
+		IsIncludeResource: includeResource,
+		IsRegionOverride:  regionOverride,
+		TemplateData:      templateData,
 	}
 
 	if err := writeTemplate("testconfig", tcf, lisTestConfigTmpl, force, testConfig); err != nil {

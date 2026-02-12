@@ -83,6 +83,72 @@ func TestAcc{{ .Service }}{{ .ListResource }}_List_basic(t *testing.T) {
 	})
 }
 
+func TestAcc{{ .Service }}{{ .ListResource }}_List_includeResource(t *testing.T) {
+	ctx := acctest.Context(t)
+
+	resourceName1 := "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test[0]"
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+
+	identity1 := tfstatecheck.Identity()
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(tfversion.Version1_14_0),
+		},
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			testAcc{{ .ListResource }}PreCheck(ctx, t)
+		},
+		ErrorCheck:   acctest.ErrorCheck(t, names.{{ .Service }}ServiceID),
+		CheckDestroy: testAccCheck{{ .ListResource }}Destroy(ctx),
+		Steps: []resource.TestStep{
+			// Step 1: Setup
+			{
+				ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+				ConfigDirectory:          config.StaticDirectory("testdata/{{ .ListResource }}/list_include_resource/"),
+				ConfigVariables: config.Variables{
+					acctest.CtRName:  config.StringVariable(rName),
+					"resource_count": config.IntegerVariable(1),
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					identity1.GetIdentity(resourceName1),
+					statecheck.ExpectKnownValue(resourceName1, tfjsonpath.New(names.AttrARN), tfknownvalue.RegionalARNExact("{{ .SDKPackage }}", "{{ .ListResourceLower }}:"+rName+"-0")),
+				},
+			},
+
+			// Step 2: Query
+			{
+				Query:                    true,
+				ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+				ConfigDirectory:          config.StaticDirectory("testdata/{{ .ListResource }}/list_include_resource/"),
+				ConfigVariables: config.Variables{
+					acctest.CtRName:  config.StringVariable(rName),
+					"resource_count": config.IntegerVariable(1),
+				},
+				QueryResultChecks: []querycheck.QueryResultCheck{
+					tfquerycheck.ExpectIdentityFunc("aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test", identity1.Checks()),
+					querycheck.ExpectResourceDisplayName("aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test", tfqueryfilter.ByResourceIdentityFunc(identity1.Checks()), knownvalue.StringExact(rName+"-0")),
+					querycheck.ExpectResourceKnownValues("aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}.test", tfqueryfilter.ByResourceIdentityFunc(identity1.Checks()), []querycheck.KnownValueCheck{
+						{{- if .IncludeComments }}
+						// TIP: Add checks for _all_ resource attributes, including "region".
+						// If the resource is implemented in Plugin SDK, also include the "id" attribute.
+						{{- end }}
+						tfquerycheck.KnownValueCheck(tfjsonpath.New(names.AttrARN), tfknownvalue.RegionalARNExact("{{ .SDKPackage }}", "{{ .ListResourceLower }}:"+rName+"-0")),
+						tfquerycheck.KnownValueCheck(tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.Region())),
+						tfquerycheck.KnownValueCheck(tfjsonpath.New(names.AttrID), knownvalue.StringExact(rName)),
+						tfquerycheck.KnownValueCheck(tfjsonpath.New(names.AttrTags), knownvalue.MapExact(map[string]knownvalue.Check{
+							acctest.CtKey1: knownvalue.StringExact(acctest.CtValue1),
+						})),
+						tfquerycheck.KnownValueCheck(tfjsonpath.New(names.AttrTagsAll), knownvalue.MapExact(map[string]knownvalue.Check{
+							acctest.CtKey1: knownvalue.StringExact(acctest.CtValue1),
+						})),
+					}),
+				},
+			},
+		},
+	})
+}
+
 func TestAcc{{ .Service }}{{ .ListResource }}_List_regionOverride(t *testing.T) {
 	ctx := acctest.Context(t)
 

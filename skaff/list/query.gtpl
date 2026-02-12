@@ -8,11 +8,7 @@ list "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "test" {
     region = var.region
   }
 {{ end -}}
-}
-{{ if not .IsRegionOverride }}
-list "aws_{{ .ServicePackage }}_{{ .ListResourceSnake }}" "include" {
-  provider = aws
-
+{{ if .IsIncludeResource }}
   include_resource = true
-}
 {{ end -}}
+}
