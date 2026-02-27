@@ -115,10 +115,12 @@ func (l *instanceListResource) List(ctx context.Context, request list.ListReques
 
 			rd := l.ResourceData()
 			rd.SetId(aws.ToString(instance.InstanceId))
-			result.Diagnostics.Append(translateDiags(resourceInstanceFlatten(ctx, awsClient, &instance, rd))...)
-			if result.Diagnostics.HasError() {
-				yield(result)
-				return
+			if request.IncludeResource {
+				result.Diagnostics.Append(translateDiags(resourceInstanceFlatten(ctx, awsClient, &instance, rd))...)
+				if result.Diagnostics.HasError() {
+					yield(result)
+					return
+				}
 			}
 
 			if v, ok := tags["Name"]; ok {
