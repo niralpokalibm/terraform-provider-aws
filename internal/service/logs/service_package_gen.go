@@ -197,9 +197,11 @@ func (p *servicePackage) SDKListResources(ctx context.Context) iter.Seq[*inttype
 			TypeName: "aws_cloudwatch_log_group",
 			Name:     "Log Group",
 			Region:   unique.Make(inttypes.ResourceRegionDefault()),
-			Tags: unique.Make(inttypes.ServicePackageResourceTags{
-				IdentifierAttribute: names.AttrARN,
-			}),
+			// Tags disabled here - we fetch them in batches directly in group_list.go
+			// to avoid rate limiting (15 TPS limit, need batching to stay under)
+			// Tags: unique.Make(inttypes.ServicePackageResourceTags{
+			// 	IdentifierAttribute: names.AttrARN,
+			// }),
 			Identity: inttypes.RegionalSingleParameterIdentity(names.AttrName),
 		},
 	})

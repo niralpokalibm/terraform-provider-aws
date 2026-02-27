@@ -10,8 +10,10 @@ import (
 	"github.com/YakDriver/smarterr"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	awstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
+	"github.com/hashicorp/terraform-provider-aws/internal/errs"
 	"github.com/hashicorp/terraform-provider-aws/internal/logging"
 	tftags "github.com/hashicorp/terraform-provider-aws/internal/tags"
 	"github.com/hashicorp/terraform-provider-aws/internal/types/option"
@@ -22,11 +24,56 @@ import (
 // The identifier is typically the Amazon Resource Name (ARN), although
 // it may also be a different identifier depending on the service.
 func listTags(ctx context.Context, conn *cloudwatchlogs.Client, identifier string, optFns ...func(*cloudwatchlogs.Options)) (tftags.KeyValueTags, error) {
+	// Rate limit: CloudWatch Logs ListTagsForResource has 15 TPS limit
+	if err := waitForListTagsRateLimit(ctx); err != nil {
+		return tftags.New(ctx, nil), smarterr.NewError(err)
+	}
+
+	tflog.Debug(ctx, "Fetching tags for log group", map[string]any{
+		"resource_arn": identifier,
+	})
+
 	input := cloudwatchlogs.ListTagsForResourceInput{
 		ResourceArn: aws.String(identifier),
 	}
 
-	output, err := conn.ListTagsForResource(ctx, &input, optFns...)
+	// Retry up to 3 times if throttled (SDK retries are disabled for throttling)
+	var output *cloudwatchlogs.ListTagsForResourceOutput
+	var err error
+	maxRetries := 3
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		output, err = conn.ListTagsForResource(ctx, &input, optFns...)
+		
+		if err == nil {
+			break // Success
+		}
+		
+		// Check if it's a throttling error
+		if errs.IsAErrorMessageContains[*awstypes.ThrottlingException](err, "Rate exceeded") {
+			if attempt < maxRetries {
+				// Wait and retry (our rate limiter will enforce proper delay)
+				tflog.Debug(ctx, "Throttled - retrying after rate limit delay", map[string]any{
+					"attempt":      attempt,
+					"max_retries":  maxRetries,
+					"resource_arn": identifier,
+				})
+				
+				// Wait for rate limiter before retry
+				if waitErr := waitForListTagsRateLimit(ctx); waitErr != nil {
+					return tftags.New(ctx, nil), smarterr.NewError(waitErr)
+				}
+				continue
+			}
+			// Max retries exceeded
+			tflog.Warn(ctx, "Max retries exceeded for throttling", map[string]any{
+				"resource_arn": identifier,
+			})
+		}
+		
+		// Non-throttling error or max retries exceeded
+		break
+	}
 
 	if err != nil {
 		return tftags.New(ctx, nil), smarterr.NewError(err)
