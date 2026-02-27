@@ -67,18 +67,20 @@ func (l *listResourceBucket) List(ctx context.Context, request list.ListRequest,
 			rd.SetId(bucketName)
 			rd.Set(names.AttrBucket, bucketName)
 
-			tflog.Info(ctx, "Reading S3 Bucket")
-			diags := resourceBucketRead(ctx, rd, l.Meta())
-			if diags.HasError() {
-				tflog.Error(ctx, "Reading S3 Bucket", map[string]any{
-					names.AttrBucket: bucketName,
-					"diags":          sdkdiag.DiagnosticsString(diags),
-				})
-				continue
-			}
-			if rd.Id() == "" {
-				// Resource is logically deleted
-				continue
+			if request.IncludeResource {
+				tflog.Info(ctx, "Reading S3 Bucket")
+				diags := resourceBucketRead(ctx, rd, l.Meta())
+				if diags.HasError() {
+					tflog.Error(ctx, "Reading S3 Bucket", map[string]any{
+						names.AttrBucket: bucketName,
+						"diags":          sdkdiag.DiagnosticsString(diags),
+					})
+					continue
+				}
+				if rd.Id() == "" {
+					// Resource is logically deleted
+					continue
+				}
 			}
 
 			result.DisplayName = bucketName
